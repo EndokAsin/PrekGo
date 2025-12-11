@@ -110,7 +110,7 @@
 
         <!-- RESULT MODAL (CAPTURE AREA) -->
         <div id="result-modal" class="fixed inset-0 bg-black/80 z-50 hidden flex items-center justify-center p-4">
-            <div class="bg-white rounded-2xl p-1 w-full max-w-sm shadow-2xl animate-[bounce_1s_infinite]">
+            <div class="bg-white rounded-2xl p-1 w-full max-w-sm shadow-2xl animate-[bounce_1s_3]">
                 
                 <!-- TICKET AREA (Bagian ini yang akan didownload) -->
                 <div id="ticket-area" class="bg-white p-6 rounded-xl border-2 border-dashed border-gray-300 relative text-center">
@@ -220,7 +220,7 @@
             
             // Hapus animasi bounce sementara agar screenshot tidak buram/goyang
             const modalContainer = document.querySelector('#result-modal > div');
-            modalContainer.classList.remove('animate-[bounce_1s_infinite]');
+            modalContainer.classList.remove('animate-[bounce_1s_3]');
 
             html2canvas(ticketElement, {
                 scale: 3, // Lebih tajam
