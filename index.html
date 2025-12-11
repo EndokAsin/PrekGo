@@ -252,6 +252,18 @@
 
             document.getElementById('loading').classList.remove('hidden', 'opacity-0');
 
+            // 0. CEK DEVICE (Agar 1 Device tidak bisa pakai kode yang sama 2x)
+            const { data: historyData } = await supabase
+                .from('winners')
+                .select('id')
+                .eq('access_code', codeInput)
+                .eq('device_id', deviceId)
+                .maybeSingle();
+
+            if (historyData) {
+                return showError('HP ini sudah pernah memakai kode tersebut!');
+            }
+
             // 1. Validate Code
             const { data: codeData, error: codeError } = await supabase
                 .from('access_codes')
