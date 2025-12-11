@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - PrekGo Gacha</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- QRCode JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap');
+        body { font-family: 'Poppins', sans-serif; }
+        
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #EF4444; border-radius: 3px; }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+        }
+
+        .wheel-container {
+            position: relative;
+            width: 100%;
+            max-width: 320px;
+            margin: 0 auto;
+            aspect-ratio: 1 / 1;
+        }
+        #canvas {
+            width: 100%;
+            height: 100%;
+            transition: transform 4s cubic-bezier(0.25, 0.1, 0.25, 1);
+            filter: drop-shadow(0 10px 15px rgba(0,0,0,0.15));
+        }
+        .arrow {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0; 
+            height: 0; 
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-top: 30px solid #991B1B; 
+            z-index: 10;
+            filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3));
+        }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 4px; }
+    </style>
+</head>
+<body class="bg-orange-50 min-h-screen text-gray-800">
+
+    <!-- HEADER -->
+    <header class="bg-gradient-to-r from-red-700 to-orange-600 text-white p-4 shadow-lg flex justify-between items-center sticky top-0 z-50">
+        <div class="flex items-center gap-2">
+            <div class="bg-white p-2 rounded-lg text-red-600">
+                <i class="fas fa-utensils"></i>
+            </div>
+            <h1 class="text-xl font-extrabold tracking-wider">Prek<span class="text-yellow-300">Go</span> <span class="text-red-100 text-sm font-normal hidden sm:inline">| Admin Dashboard</span></h1>
+        </div>
+        <button onclick="logout()" id="logout-btn" class="hidden px-4 py-2 text-sm bg-white/10 text-white rounded hover:bg-white/20 transition border border-white/30">
+            <i class="fas fa-sign-out-alt mr-2"></i>Keluar
+        </button>
+    </header>
+
+    <div class="container mx-auto p-4 lg:p-6">
+
+        <!-- ERROR ALERT -->
+        <div id="error-alert" class="hidden fixed top-20 right-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded shadow-lg z-50 animate-bounce" role="alert">
+            <div class="flex items-center">
+                <i class="fas fa-exclamation-triangle mr-2"></i>
+                <p id="error-msg" class="font-bold text-sm">Error</p>
+            </div>
+        </div>
+
+        <!-- VIEW: LOGIN -->
+        <section id="view-login" class="flex flex-col items-center justify-center min-h-[70vh]">
+            <div class="glass-panel p-8 text-center max-w-sm w-full rounded-2xl border-t-4 border-red-500">
+                <div class="mb-6 bg-orange-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto text-orange-600 text-3xl">
+                    <i class="fas fa-user-lock"></i>
+                </div>
+                <h2 class="text-2xl font-bold mb-2 text-gray-800">Login Admin</h2>
+                <p class="text-sm text-gray-500 mb-6">Masuk untuk mengelola promo & kode.</p>
+                
+                <form onsubmit="event.preventDefault(); loginAdmin();">
+                    <input type="password" id="admin-pass" placeholder="Password..." class="w-full p-3 border border-gray-200 rounded-xl mb-4 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition bg-white">
+                    <button type="submit" class="w-full bg-gradient-to-r from-red-600 to-orange-500 text-white py-3 rounded-xl font-bold hover:from-red-700 hover:to-orange-600 hover:shadow-lg hover:-translate-y-1 transition duration-200">
+                        Masuk Dashboard
+                    </button>
+                </form>
+            </div>
+        </section>
+
+        <!-- VIEW: DASHBOARD (Split Layout) -->
+        <section id="view-dashboard" class="hidden pb-24 animate-[fadeIn_0.5s_ease-out]">
+            
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <!-- LEFT COLUMN: CONTROLS (Promo & QR) -->
+                <div class="lg:col-span-7 space-y-6">
+                    
+                    <!-- 1. MANAGE PROMOS -->
+                    <div class="glass-panel rounded-2xl p-6 bg-white border-t-4 border-orange-500">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="font-bold text-lg text-gray-800 flex items-center">
+                                <span class="bg-orange-100 text-orange-600 p-2 rounded-lg mr-3"><i class="fas fa-gifts"></i></span>
+                                Atur Hadiah
+                            </h3>
+                            <button onclick="loadPromos()" class="text-sm text-gray-400 hover:text-orange-500 transition">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                        
+                        <!-- Add Form -->
+                        <form onsubmit="addPromo(event)" class="bg-orange-50 p-4 rounded-xl border border-orange-100 mb-4 transition focus-within:ring-2 focus-within:ring-orange-200">
+                            <div class="grid grid-cols-12 gap-2">
+                                <div class="col-span-12 sm:col-span-6">
+                                    <label class="text-xs text-gray-500 font-bold ml-1 uppercase">Nama Hadiah</label>
+                                    <input type="text" id="new-promo-name" placeholder="Contoh: Gratis Es Teh" class="w-full p-2 bg-white border rounded-lg text-sm focus:border-orange-400 focus:outline-none" required>
+                                </div>
+                                <div class="col-span-8 sm:col-span-4">
+                                    <label class="text-xs text-gray-500 font-bold ml-1 uppercase">Peluang</label>
+                                    <input type="number" id="new-promo-prob" placeholder="1-100" class="w-full p-2 bg-white border rounded-lg text-sm focus:border-orange-400 focus:outline-none" min="1" max="1000" value="10">
+                                </div>
+                                <div class="col-span-4 sm:col-span-2">
+                                    <label class="text-xs text-gray-500 font-bold ml-1 uppercase">Warna</label>
+                                    <div class="relative h-[38px]">
+                                        <input type="color" id="new-promo-color" value="#DC2626" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                                        <div id="color-preview" class="w-full h-full rounded-lg border border-gray-200 shadow-inner" style="background-color: #DC2626;"></div>
+                                    </div>
+                                </div>
+                                <div class="col-span-12 mt-2">
+                                    <button type="submit" class="w-full bg-gradient-to-r from-red-600 to-orange-500 hover:from-red-700 hover:to-orange-600 text-white py-2 rounded-lg font-bold text-sm transition shadow-sm border-b-4 border-red-800 active:border-b-0 active:mt-3 active:mb-[-1px]">
+                                        <i class="fas fa-plus mr-1"></i> Tambah Hadiah
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+
+                        <!-- List Header -->
+                        <div class="grid grid-cols-12 gap-2 text-xs font-bold text-gray-400 px-2 mb-2 uppercase">
+                            <div class="col-span-6">Nama & Warna</div>
+                            <div class="col-span-3 text-center">Peluang</div>
+                            <div class="col-span-3 text-right">Aksi</div>
+                        </div>
+
+                        <!-- Scrollable List -->
+                        <ul id="promo-list" class="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar pr-1">
+                            <!-- Items Injected JS -->
+                        </ul>
+                    </div>
+
+                    <!-- 2. GENERATE QR & CODE -->
+                    <div class="glass-panel rounded-2xl p-6 bg-white border-t-4 border-blue-500">
+                        <h3 class="font-bold text-lg text-gray-800 flex items-center mb-4">
+                            <span class="bg-blue-100 text-blue-600 p-2 rounded-lg mr-3"><i class="fas fa-qrcode"></i></span>
+                            Buat Tiket Gacha
+                        </h3>
+                        
+                        <div class="grid grid-cols-12 gap-4 mb-4">
+                            <div class="col-span-8">
+                                <label class="text-xs text-gray-500 font-bold ml-1 uppercase">Kode Custom (Opsional)</label>
+                                <input type="text" id="custom-code-input" placeholder="Misal: VIP-GILA (Kosong = Acak)" class="w-full p-3 bg-gray-50 border rounded-lg text-sm font-mono focus:border-blue-400 focus:outline-none uppercase tracking-wide">
+                            </div>
+                            <div class="col-span-4">
+                                <label class="text-xs text-gray-500 font-bold ml-1 uppercase">Kuota Orang</label>
+                                <input type="number" id="quota-input" value="1" min="1" max="100" class="w-full p-3 bg-gray-50 border rounded-lg text-sm font-mono focus:border-blue-400 focus:outline-none text-center">
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col sm:flex-row gap-4">
+                            <button onclick="generateAccessCode()" id="btn-generate" class="flex-1 bg-blue-600 text-white py-3 px-4 rounded-xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 hover:scale-[1.02] transition flex items-center justify-center">
+                                <i class="fas fa-magic mr-2"></i> Generate QR
+                            </button>
+                        </div>
+
+                        <!-- Result Area -->
+                        <div id="qr-result-area" class="hidden mt-6 bg-slate-50 border border-slate-200 rounded-xl p-4 transition-all duration-300 scroll-mt-24">
+                            <div class="flex flex-col items-center gap-6">
+                                <div class="bg-white p-4 rounded-lg shadow-md border border-gray-100 flex flex-col items-center max-w-full relative">
+                                    <div class="absolute -top-3 bg-yellow-400 text-xs font-bold px-3 py-1 rounded-full shadow-sm">SIAP DICETAK</div>
+                                    <div id="qrcode" class="mb-2 bg-white p-2"></div> 
+                                    <div class="w-full text-center border-t mt-2 pt-2">
+                                        <p class="text-[10px] text-gray-400 mb-1">Target Link:</p>
+                                        <a id="debug-url-link" href="#" target="_blank" class="text-xs text-blue-600 underline break-all font-mono block">...</a>
+                                    </div>
+                                    <button onclick="downloadQR()" class="text-xs bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-full font-bold transition flex items-center mt-3 shadow-lg">
+                                        <i class="fas fa-download mr-1"></i> Download PNG
+                                    </button>
+                                </div>
+                                <div class="text-center w-full">
+                                    <p class="text-xs text-gray-500 uppercase font-bold mb-1">Kode Tiket</p>
+                                    <div class="bg-white border-2 border-dashed border-gray-300 rounded-lg p-3 mb-2 flex justify-between items-center group cursor-pointer max-w-xs mx-auto" onclick="copyCode()">
+                                        <span id="generated-code-display" class="text-2xl font-mono font-bold text-gray-800 tracking-widest pl-2">PK-0000</span>
+                                        <i class="fas fa-copy text-gray-300 group-hover:text-blue-500 pr-2"></i>
+                                    </div>
+                                    <p id="quota-display" class="text-xs font-bold text-green-600 mb-2"></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. CODE HISTORY -->
+                    <div class="glass-panel rounded-2xl p-6 bg-white border-t-4 border-gray-600">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-bold text-lg text-gray-800 flex items-center">
+                                <span class="bg-gray-100 text-gray-600 p-2 rounded-lg mr-3"><i class="fas fa-history"></i></span>
+                                Riwayat Tiket
+                            </h3>
+                            <button onclick="loadAccessCodes()" class="text-sm text-gray-400 hover:text-gray-600 transition">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-500 mb-3">Klik baris kode untuk melihat kembali QR-nya.</p>
+                        <div class="grid grid-cols-12 gap-2 text-xs font-bold text-gray-400 px-2 mb-2 uppercase border-b pb-2">
+                            <div class="col-span-5">Kode</div>
+                            <div class="col-span-4 text-center">Terpakai</div>
+                            <div class="col-span-3 text-right">Hapus</div>
+                        </div>
+                        <ul id="access-code-list" class="space-y-2 max-h-[250px] overflow-y-auto custom-scrollbar pr-1"></ul>
+                    </div>
+                </div>
+
+                <!-- RIGHT COLUMN: LIVE PREVIEW WHEEL -->
+                <div class="lg:col-span-5">
+                    <div class="glass-panel rounded-2xl p-6 bg-white sticky top-24 border-t-4 border-red-500">
+                        <h3 class="font-bold text-lg text-gray-800 flex items-center mb-6 justify-center">
+                            <span class="bg-red-100 text-red-600 p-2 rounded-lg mr-3"><i class="fas fa-eye"></i></span>
+                            Live Preview
+                        </h3>
+                        <div class="wheel-container mb-6">
+                            <div class="arrow"></div>
+                            <canvas id="canvas" width="500" height="500"></canvas>
+                        </div>
+                        <div class="text-center">
+                            <button onclick="testSpin()" id="test-spin-btn" class="bg-gray-800 text-white px-6 py-2 rounded-full font-bold text-sm hover:bg-gray-700 transition shadow-lg">
+                                <i class="fas fa-play mr-2"></i> Test Spin (Simulasi)
+                            </button>
+                            <div id="test-result" class="mt-4 text-lg font-bold text-red-600 h-8"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        // --- CONFIG ---
+        const SUPABASE_URL = 'https://snuzqewdxsmwpnauqngp.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_bWwboKqkZsmKlYeQDgAQGw_kJZsRkLr'; 
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // --- GLOBAL VARIABLES ---
+        let items = []; 
+        let ctx;
+        let startAngle = 0;
+        let arc;
+        let spinTimeout = null;
+        let spinAngleStart = 10;
+        let spinTime = 0;
+        let spinTimeTotal = 0;
+        let isSpinning = false;
+
+        // --- AUTH LOGIC ---
+        function loginAdmin() {
+            const pass = document.getElementById('admin-pass').value;
+            if (pass === 'prekgo123') {
+                document.getElementById('view-login').classList.add('hidden');
+                document.getElementById('view-dashboard').classList.remove('hidden');
+                document.getElementById('logout-btn').classList.remove('hidden');
+                initWheelCanvas();
+                loadPromos();
+                loadAccessCodes();
+                document.getElementById('new-promo-color').addEventListener('input', (e) => {
+                    document.getElementById('color-preview').style.backgroundColor = e.target.value;
+                });
+            } else {
+                showError('Password Salah!');
+            }
+        }
+
+        function logout() { location.reload(); }
+
+        function showError(msg) {
+            const alertBox = document.getElementById('error-alert');
+            document.getElementById('error-msg').innerText = msg;
+            alertBox.classList.remove('hidden');
+            setTimeout(() => alertBox.classList.add('hidden'), 5000);
+        }
+
+        function copyCode() {
+            const code = document.getElementById('generated-code-display').innerText;
+            const tempInput = document.createElement("input");
+            tempInput.value = code;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand("copy");
+            document.body.removeChild(tempInput);
+            const display = document.getElementById('generated-code-display');
+            const originalColor = display.className;
+            display.classList.remove('text-gray-800');
+            display.classList.add('text-green-500');
+            setTimeout(() => { display.className = originalColor; }, 500);
+        }
+
+        function getRandomThemeColor() {
+            const hue = Math.floor(Math.random() * 35); 
+            const sat = 85 + Math.floor(Math.random() * 15); 
+            const light = 45 + Math.floor(Math.random() * 15);
+            return hslToHex(hue, sat, light);
+        }
+
+        function hslToHex(h, s, l) {
+            l /= 100;
+            const a = s * Math.min(l, 1 - l) / 100;
+            const f = n => {
+                const k = (n + h / 30) % 12;
+                const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+                return Math.round(255 * color).toString(16).padStart(2, '0');   
+            };
+            return `#${f(0)}${f(8)}${f(4)}`;
+        }
+
+        async function loadPromos() {
+            const list = document.getElementById('promo-list');
+            if(items.length === 0) list.innerHTML = '<li class="text-center text-gray-400 text-xs py-4"><i class="fas fa-spinner fa-spin"></i> Memuat...</li>';
+            
+            const { data, error } = await supabase.from('promos').select('*').order('id');
+            if (error) return showError('Gagal load data: ' + error.message);
+
+            items = data; 
+            drawRouletteWheel();
+            renderPromoList();
+        }
+
+        function renderPromoList() {
+            const list = document.getElementById('promo-list');
+            list.innerHTML = '';
+            if(items.length === 0) {
+                list.innerHTML = '<li class="text-center text-gray-400 text-sm p-4 bg-gray-50 rounded border border-dashed">Belum ada hadiah. Tambahkan diatas.</li>';
+                return;
+            }
+            items.forEach(p => {
+                const li = document.createElement('li');
+                li.className = 'grid grid-cols-12 gap-2 items-center bg-white p-3 rounded-lg border hover:shadow-sm transition group';
+                li.innerHTML = `
+                    <div class="col-span-6 flex items-center">
+                        <input type="color" value="${p.color}" onchange="updatePromoColor(${p.id}, this.value)" class="w-8 h-8 rounded cursor-pointer border-none mr-3 shadow-sm bg-transparent">
+                        <span class="font-bold text-sm text-gray-700 truncate">${p.name}</span>
+                    </div>
+                    <div class="col-span-3 text-center"><span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500 font-mono">${p.probability}</span></div>
+                    <div class="col-span-3 text-right"><button onclick="deletePromo(${p.id})" class="text-gray-300 hover:text-red-500 transition px-2"><i class="fas fa-trash-alt"></i></button></div>
+                `;
+                list.appendChild(li);
+            });
+        }
+
+        async function updatePromoColor(id, newColor) {
+            const item = items.find(i => i.id === id);
+            if(item) { item.color = newColor; drawRouletteWheel(); }
+            await supabase.from('promos').update({ color: newColor }).eq('id', id);
+        }
+
+        async function addPromo(e) {
+            e.preventDefault();
+            const btn = e.target.querySelector('button[type="submit"]');
+            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>'; btn.disabled = true;
+            const name = document.getElementById('new-promo-name').value;
+            const color = document.getElementById('new-promo-color').value;
+            const prob = document.getElementById('new-promo-prob').value;
+            const { error } = await supabase.from('promos').insert([{ name, color, probability: parseInt(prob) }]);
+            if (error) showError('Gagal: ' + error.message);
+            else {
+                document.getElementById('new-promo-name').value = '';
+                const nextColor = getRandomThemeColor();
+                document.getElementById('new-promo-color').value = nextColor;
+                document.getElementById('color-preview').style.backgroundColor = nextColor;
+                await loadPromos(); 
+            }
+            btn.innerHTML = '<i class="fas fa-plus mr-1"></i> Tambah Hadiah'; btn.disabled = false;
+        }
+
+        async function deletePromo(id) {
+            if(!confirm('Hapus hadiah ini?')) return;
+            const { error } = await supabase.from('promos').delete().eq('id', id);
+            if (!error) loadPromos();
+        }
+
+        async function loadAccessCodes() {
+            const list = document.getElementById('access-code-list');
+            list.innerHTML = '<li class="text-center text-gray-400 text-xs py-4"><i class="fas fa-spinner fa-spin"></i> Memuat...</li>';
+            const { data, error } = await supabase.from('access_codes').select('*').order('created_at', { ascending: false }).limit(50);
+            if (error) return showError('Gagal load riwayat: ' + error.message);
+            list.innerHTML = '';
+            if (!data || data.length === 0) {
+                list.innerHTML = '<li class="text-center text-gray-400 text-sm p-4">Belum ada kode dibuat.</li>';
+                return;
+            }
+            data.forEach(codeItem => {
+                const li = document.createElement('li');
+                li.className = 'grid grid-cols-12 gap-2 items-center bg-white p-3 rounded-lg border hover:shadow-md transition cursor-pointer hover:bg-blue-50';
+                li.onclick = (e) => { if (e.target.closest('button')) return; viewCodeDetails(codeItem.code, codeItem.max_uses || 1); };
+                const current = codeItem.current_uses || 0;
+                const max = codeItem.max_uses || 1;
+                let usageBadgeClass = current >= max ? 'bg-red-100 text-red-700' : (current > 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700');
+                const usageBadge = `<span class="text-xs ${usageBadgeClass} px-2 py-1 rounded-full font-bold">${current}/${max}</span>`;
+                li.innerHTML = `
+                    <div class="col-span-5 font-mono font-bold text-gray-700 truncate" title="Klik untuk lihat QR"><i class="fas fa-eye text-gray-300 mr-1 text-[10px]"></i>${codeItem.code}</div>
+                    <div class="col-span-4 text-center">${usageBadge}</div>
+                    <div class="col-span-3 text-right"><button onclick="deleteAccessCode(event, '${codeItem.code}')" class="text-gray-300 hover:text-red-500 transition px-2 p-1 rounded hover:bg-red-50 z-10 relative" title="Hapus Kode"><i class="fas fa-trash-alt"></i></button></div>
+                `;
+                list.appendChild(li);
+            });
+        }
+
+        function viewCodeDetails(code, quota) {
+            const resultArea = document.getElementById('qr-result-area');
+            resultArea.scrollIntoView({ behavior: 'smooth' });
+            resultArea.classList.remove('hidden');
+            resultArea.classList.add('animate-[pulse_0.5s]');
+            setTimeout(() => resultArea.classList.remove('animate-[pulse_0.5s]'), 500);
+            document.getElementById('generated-code-display').innerText = code;
+            document.getElementById('quota-display').innerText = `Kuota: ${quota} Orang`;
+            let currentUrl = window.location.href.split('?')[0].replace(/\/admin(\.html)?$/, '');
+            if (currentUrl.endsWith('/')) currentUrl = currentUrl.slice(0, -1);
+            const targetUrl = `${currentUrl}/index.html?code=${code}`;
+            const debugLink = document.getElementById('debug-url-link');
+            debugLink.href = targetUrl;
+            debugLink.innerText = targetUrl;
+            const qrContainer = document.getElementById('qrcode');
+            qrContainer.innerHTML = "";
+            new QRCode(qrContainer, { text: targetUrl, width: 200, height: 200, colorDark : "#000000", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.Q });
+        }
+
+        async function deleteAccessCode(event, code) {
+            if (event) event.stopPropagation();
+            if(!confirm(`Hapus tiket "${code}"?`)) return;
+            
+            // Karena kita sudah mengaktifkan CASCADE di SQL, kita cukup hapus parentnya saja.
+            // Supabase akan otomatis menghapus winners yang terkait.
+            const { error } = await supabase.from('access_codes').delete().eq('code', code);
+            
+            if (error) {
+                console.error("Gagal hapus:", error);
+                // Jika masih error, berarti SQL belum dijalankan oleh user
+                showError(`GAGAL HAPUS: ${error.message}. Pastikan Anda sudah menjalankan script SQL "Fix Permissions" di Supabase Editor.`);
+            } else {
+                const currentDisplay = document.getElementById('generated-code-display').innerText;
+                if(currentDisplay === code) document.getElementById('qr-result-area').classList.add('hidden');
+                loadAccessCodes();
+            }
+        }
+
+        async function generateAccessCode() {
+            const btn = document.getElementById('btn-generate');
+            const originalText = btn.innerHTML;
+            const customCode = document.getElementById('custom-code-input').value.trim().toUpperCase();
+            const quota = parseInt(document.getElementById('quota-input').value) || 1; 
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...'; btn.disabled = true;
+            let code;
+            if (customCode) {
+                const { data: existing } = await supabase.from('access_codes').select('code').eq('code', customCode).single();
+                if (existing) {
+                    showError('Kode "' + customCode + '" sudah ada!');
+                    btn.innerHTML = originalText; btn.disabled = false; return;
+                }
+                code = customCode;
+            } else {
+                code = 'PK' + Math.floor(1000 + Math.random() * 9000) + Math.random().toString(36).substring(2, 4).toUpperCase();
+            }
+            const { error } = await supabase.from('access_codes').insert([{ code, max_uses: quota, current_uses: 0, is_used: false }]);
+            if (error) { showError('Gagal generate: ' + error.message); btn.innerHTML = originalText; btn.disabled = false; return; }
+            loadAccessCodes();
+            viewCodeDetails(code, quota);
+            document.getElementById('custom-code-input').value = ''; 
+            btn.innerHTML = originalText; btn.disabled = false;
+        }
+
+        function downloadQR() {
+            const qrDiv = document.getElementById('qrcode');
+            const img = qrDiv.querySelector('img');
+            if (img && img.src) {
+                const link = document.createElement('a');
+                link.href = img.src;
+                link.download = `PrekGo-QR-${document.getElementById('generated-code-display').innerText.trim()}.png`;
+                document.body.appendChild(link); link.click(); document.body.removeChild(link);
+            } else {
+                const canvas = qrDiv.querySelector('canvas');
+                if (canvas) {
+                    const link = document.createElement('a');
+                    link.href = canvas.toDataURL("image/png");
+                    link.download = `PrekGo-QR-${document.getElementById('generated-code-display').innerText.trim()}.png`;
+                    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+                } else showError("Gambar QR belum siap.");
+            }
+        }
+
+        function initWheelCanvas() {
+            const canvas = document.getElementById("canvas");
+            ctx = canvas.getContext("2d");
+            const scale = window.devicePixelRatio || 1;
+            canvas.width = 500 * scale; canvas.height = 500 * scale; ctx.scale(scale, scale);
+            drawRouletteWheel();
+        }
+
+        function drawRouletteWheel() {
+            if (!ctx) return;
+            const outsideRadius = 200; const textRadius = 160; const insideRadius = 50; const centerX = 250; const centerY = 250;
+            ctx.clearRect(0,0,500,500); ctx.font = 'bold 14px Poppins';
+            if (items.length === 0) {
+                ctx.beginPath(); ctx.arc(centerX, centerY, outsideRadius, 0, 2 * Math.PI);
+                ctx.fillStyle = "#eee"; ctx.fill(); ctx.stroke();
+                ctx.fillStyle = "#999"; ctx.fillText("Belum ada hadiah", centerX - 60, centerY);
+                return;
+            }
+            arc = Math.PI * 2 / items.length;
+            for(let i = 0; i < items.length; i++) {
+                const angle = startAngle + i * arc;
+                ctx.fillStyle = items[i].color;
+                ctx.beginPath(); ctx.arc(centerX, centerY, outsideRadius, angle, angle + arc, false);
+                ctx.arc(centerX, centerY, insideRadius, angle + arc, angle, true); ctx.stroke(); ctx.fill();
+                ctx.save(); ctx.shadowOffsetX = -1; ctx.shadowOffsetY = -1; ctx.shadowBlur = 0; ctx.fillStyle = "white"; ctx.shadowColor = "rgba(0,0,0,0.5)";
+                ctx.translate(centerX + Math.cos(angle + arc / 2) * textRadius, centerY + Math.sin(angle + arc / 2) * textRadius);
+                ctx.rotate(angle + arc / 2 + Math.PI / 2);
+                let text = items[i].name; if(text.length > 15) text = text.substring(0, 12) + '...';
+                ctx.fillText(text, -ctx.measureText(text).width / 2, 0); ctx.restore();
+            }
+        }
+
+        function testSpin() {
+            if (isSpinning || items.length === 0) return;
+            document.getElementById('test-result').innerText = ""; isSpinning = true;
+            document.getElementById('test-spin-btn').disabled = true; document.getElementById('test-spin-btn').classList.add('opacity-50');
+            let totalWeight = items.reduce((sum, item) => sum + item.probability, 0);
+            let randomNum = Math.random() * totalWeight; let weightSum = 0; let selectedIndex = 0;
+            for (let i = 0; i < items.length; i++) {
+                weightSum += items[i].probability;
+                if (randomNum <= weightSum) { selectedIndex = i; break; }
+            }
+            spinAngleStart = Math.random() * 10 + 10; spinTime = 0; spinTimeTotal = Math.random() * 3000 + 4000;
+            rotateWheel(selectedIndex);
+        }
+
+        function rotateWheel(targetIndex) {
+            spinTime += 30;
+            if(spinTime >= spinTimeTotal) { stopRotateWheel(); return; }
+            const spinAngle = spinAngleStart - (easeOut(spinTime, 0, spinAngleStart, spinTimeTotal));
+            startAngle += (spinAngle * Math.PI / 180); drawRouletteWheel();
+            spinTimeout = setTimeout(() => rotateWheel(targetIndex), 30);
+        }
+
+        function easeOut(t, b, c, d) { const ts = (t/=d)*t; const tc = ts*t; return b+c*(tc + -3*ts + 3*t); }
+
+        function stopRotateWheel() {
+            clearTimeout(spinTimeout);
+            const degrees = startAngle * 180 / Math.PI + 90; const arcd = arc * 180 / Math.PI;
+            const index = Math.floor((360 - degrees % 360) / arcd); const prize = items[index].name;
+            const resDiv = document.getElementById('test-result'); resDiv.innerText = "Hasil Test: " + prize;
+            resDiv.classList.add('animate-bounce'); setTimeout(() => resDiv.classList.remove('animate-bounce'), 1000);
+            isSpinning = false; document.getElementById('test-spin-btn').disabled = false; document.getElementById('test-spin-btn').classList.remove('opacity-50');
+        }
+    </script>
+</body>
+</html>
